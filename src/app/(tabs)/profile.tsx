@@ -2,21 +2,12 @@ import { useClerk, useUser } from "@clerk/expo";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const galleryImages = [
-  { id: "lake", image: require("../../../assets/images/profile/grid-lake.png") },
-  { id: "dog", image: require("../../../assets/images/profile/grid-dog.png") },
-  { id: "palms", image: require("../../../assets/images/profile/grid-palms.png") },
-  { id: "city", image: require("../../../assets/images/profile/grid-city.png") },
-  { id: "road", image: require("../../../assets/images/profile/grid-road.png") },
-  { id: "coffee", image: require("../../../assets/images/profile/grid-coffee.png") },
-  { id: "coast", image: require("../../../assets/images/profile/grid-coast.png") },
-  { id: "hiker", image: require("../../../assets/images/profile/grid-hiker.png") },
-  { id: "sunset", image: require("../../../assets/images/profile/grid-sunset.png") },
-];
+import { BrandLogo } from "../../components/BrandLogo";
+import { usePaginatedQuery, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
 const profileTabs = [
   { id: "grid", label: "Posts" },
@@ -27,25 +18,11 @@ const profileTabs = [
 
 type ProfileTab = (typeof profileTabs)[number]["id"];
 
-function CameraMark() {
-  return (
-    <View style={styles.brandIcon}>
-      <View style={styles.cameraBody}>
-        <View style={styles.cameraTop} />
-        <View style={styles.cameraLens}>
-          <View style={styles.cameraCore} />
-        </View>
-        <View style={styles.cameraDot} />
-      </View>
-    </View>
-  );
-}
-
 function Header({ onMore }: { onMore: () => void }) {
   return (
     <View style={styles.header}>
       <View style={styles.brand}>
-        <CameraMark />
+        <BrandLogo size={28} />
         <Text style={styles.brandName}>Codexgram</Text>
       </View>
       <View style={styles.headerActions}>
@@ -120,6 +97,7 @@ function GalleryTabs({ activeTab, onChange }: { activeTab: ProfileTab; onChange:
 export default function ProfileRoute() {
   const { signOut } = useClerk();
   const { user } = useUser();
+  const convexProfile = useQuery(api.profiles.myProfile, {});
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<ProfileTab>("grid");
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -128,6 +106,11 @@ export default function ProfileRoute() {
   const profileMetadata = user?.unsafeMetadata?.codexgramProfile as
     | { username?: string; bio?: string; website?: string; location?: string }
     | undefined;
+  const profilePosts = usePaginatedQuery(
+    api.posts.byProfile,
+    convexProfile ? { profileId: convexProfile._id } : "skip",
+    { initialNumItems: 30 },
+  );
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -148,10 +131,10 @@ export default function ProfileRoute() {
   };
 
   const photos = activeTab === "reels"
-    ? [galleryImages[1], galleryImages[4], galleryImages[8]]
-    : activeTab === "tagged"
-      ? [galleryImages[2], galleryImages[6], galleryImages[7]]
-      : galleryImages;
+    ? profilePosts.results.filter((post) => post.mediaType === "video")
+    : activeTab === "grid"
+      ? profilePosts.results
+      : [];
 
   const ListHeader = (
     <>
@@ -164,15 +147,15 @@ export default function ProfileRoute() {
           </View>
         </View>
         <View style={styles.stats}>
-          <Stat value="24" label="Posts" />
-          <Stat value="186" label="Followers" />
-          <Stat value="142" label="Following" />
+          <Stat value={String(convexProfile?.postCount ?? 0)} label="Posts" />
+          <Stat value={String(convexProfile?.followerCount ?? 0)} label="Followers" />
+          <Stat value={String(convexProfile?.followingCount ?? 0)} label="Following" />
         </View>
       </View>
       <View style={styles.profileInfo}>
-        <Text numberOfLines={1} style={styles.username}>{profileMetadata?.username || user?.username || "alex.rivera"}</Text>
-        <Text numberOfLines={1} style={styles.displayName}>{user?.fullName || "Alex Rivera"}</Text>
-        <Text style={styles.bio}>{profileMetadata?.bio || "Product designer, coffee lover.\nExploring what’s next. ☕ 🌎"}</Text>
+        <Text numberOfLines={1} style={styles.username}>{convexProfile?.username || profileMetadata?.username || user?.username || "alex.rivera"}</Text>
+        <Text numberOfLines={1} style={styles.displayName}>{convexProfile?.displayName || user?.fullName || "Alex Rivera"}</Text>
+        <Text style={styles.bio}>{convexProfile?.bio || profileMetadata?.bio || "Product designer, coffee lover.\nExploring what’s next. ☕ 🌎"}</Text>
         <View style={styles.tags}>
           {["#travel", "#design", "#photography", "#coffee"].map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}
         </View>
@@ -198,9 +181,17 @@ export default function ProfileRoute() {
       <FlatList
         key={activeTab}
         data={photos}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         numColumns={3}
-        renderItem={({ item }) => <Image source={item.image} contentFit="cover" style={{ width: tileSize, height: tileSize }} />}
+        renderItem={({ item }) => (
+          <Pressable accessibilityRole="button" accessibilityLabel="Open post comments" onPress={() => router.push({ pathname: "/comments/[postId]", params: { postId: item._id } })}>
+            {item.mediaType === "image" && item.mediaUrl
+              ? <Image source={{ uri: item.mediaUrl }} contentFit="cover" style={{ width: tileSize, height: tileSize }} />
+              : <View style={[styles.videoGridTile, { width: tileSize, height: tileSize }]}><Text style={styles.videoGridLabel}>▶</Text></View>}
+          </Pressable>
+        )}
+        ListEmptyComponent={profilePosts.status === "LoadingFirstPage" ? <ActivityIndicator color="#1677F8" style={styles.galleryLoading} /> : <Text style={styles.galleryEmpty}>{activeTab === "saved" ? "Saved posts will appear here." : activeTab === "tagged" ? "Posts you’re tagged in will appear here." : "Your posts will appear here."}</Text>}
+        ListFooterComponent={profilePosts.status === "CanLoadMore" ? <Pressable onPress={() => profilePosts.loadMore(30)} style={styles.galleryMore}><Text style={styles.galleryMoreLabel}>Load more posts</Text></Pressable> : null}
         ListHeaderComponent={ListHeader}
         columnWrapperStyle={styles.gridRow}
         contentContainerStyle={styles.gridContent}
@@ -214,12 +205,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
   header: { height: 50, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { flexDirection: "row", alignItems: "center", gap: 8 },
-  brandIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: "#1677F8", alignItems: "center", justifyContent: "center" },
-  cameraBody: { width: 19, height: 15, borderRadius: 4, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  cameraTop: { position: "absolute", top: -2, left: 3, width: 7, height: 4, borderTopLeftRadius: 2, borderTopRightRadius: 2, backgroundColor: "#FFFFFF" },
-  cameraLens: { width: 11, height: 11, borderRadius: 6, backgroundColor: "#152650", alignItems: "center", justifyContent: "center" },
-  cameraCore: { width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: "#A4C6FF", backgroundColor: "#3988FF" },
-  cameraDot: { position: "absolute", top: 3, right: 2, width: 2, height: 2, borderRadius: 1, backgroundColor: "#3988FF" },
   brandName: { color: "#111827", fontSize: 21, fontWeight: "800", letterSpacing: -0.5 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 16 },
   headerButton: { width: 30, height: 34, alignItems: "center", justifyContent: "center" },
@@ -247,6 +232,12 @@ const styles = StyleSheet.create({
   selectedTabIndicator: { backgroundColor: "#1677F8", borderTopLeftRadius: 3, borderTopRightRadius: 3 },
   gridContent: { paddingHorizontal: 6, paddingTop: 4, paddingBottom: 10 },
   gridRow: { gap: 4, marginBottom: 4 },
+  videoGridTile: { alignItems: "center", justifyContent: "center", backgroundColor: "#24334E" },
+  videoGridLabel: { color: "#FFFFFF", fontSize: 22 },
+  galleryLoading: { marginTop: 28 },
+  galleryEmpty: { paddingHorizontal: 28, paddingVertical: 30, color: "#77839A", textAlign: "center", fontSize: 13 },
+  galleryMore: { alignItems: "center", paddingVertical: 14 },
+  galleryMoreLabel: { color: "#1677F8", fontSize: 12, fontWeight: "600" },
   error: { paddingHorizontal: 18, paddingTop: 8, color: "#C62828", fontSize: 13, textAlign: "center" },
   signingOut: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, zIndex: 3, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.7)" },
   signingOutText: { color: "#111827", fontSize: 15, fontWeight: "600" },

@@ -1,6 +1,9 @@
 import { Image } from "expo-image";
+import { router } from "expo-router";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   ScrollView,
@@ -9,88 +12,47 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-  type ImageSourcePropType,
 } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
+import { BrandLogo } from "../../components/BrandLogo";
+import type { PostItem } from "../../components/PostCard";
 
-const colors = {
-  ink: "#101B32",
-  muted: "#78859E",
-  blue: "#1677F8",
-  line: "#E7EBF2",
-  pale: "#F1F4F9",
-  white: "#FFFFFF",
-};
-
+const colors = { ink: "#101B32", muted: "#78859E", blue: "#1677F8", line: "#E7EBF2", pale: "#F1F4F9", white: "#FFFFFF" };
 const topics = ["All", "Travel", "Nature", "Pets", "Food", "Design", "Lifestyle", "Photography", "Outdoors"];
-
-const suggestions = [
-  { id: "alex", name: "alex.rivera", category: "Travel & Nature", ring: "#1684FF", image: require("../../../assets/images/feed/alex.png") },
-  { id: "maya", name: "maya.b", category: "Lifestyle", ring: "#E84390", image: require("../../../assets/images/feed/maya.png") },
-  { id: "jordan", name: "jordan.k", category: "Photography", ring: "#A279FF", image: require("../../../assets/images/feed/jordan.png") },
-  { id: "taylor", name: "taylor.b", category: "Food & Coffee", ring: "#26BDD0", image: require("../../../assets/images/feed/taylor.png") },
-  { id: "casey", name: "casey.dev", category: "Outdoor Life", ring: "#72A4F6", image: require("../../../assets/images/feed/casey.png") },
+const rings = ["#1684FF", "#E84390", "#A279FF", "#26BDD0", "#72A4F6"];
+const fallbackAvatars = [
+  require("../../../assets/images/feed/alex.png"),
+  require("../../../assets/images/feed/maya.png"),
+  require("../../../assets/images/feed/jordan.png"),
+  require("../../../assets/images/feed/taylor.png"),
+  require("../../../assets/images/feed/casey.png"),
 ];
-
-type ExplorePost = {
-  id: string;
-  name: string;
-  avatar: ImageSourcePropType;
-  image: ImageSourcePropType;
-  title: string;
-  topic: string;
-  likes: number;
-};
-
-const posts: ExplorePost[] = [
-  { id: "lake", name: "alex.rivera", avatar: suggestions[0].image, image: require("../../../assets/images/profile/grid-lake.png"), title: "Morning views at Lake Louise 🏔️", topic: "Travel", likes: 124 },
-  { id: "dog", name: "maya.b", avatar: suggestions[1].image, image: require("../../../assets/images/profile/grid-dog.png"), title: "Beach days are always better 💙", topic: "Pets", likes: 86 },
-  { id: "palms", name: "taylor.b", avatar: suggestions[3].image, image: require("../../../assets/images/profile/grid-palms.png"), title: "Golden hour in San Diego 🌅", topic: "Nature", likes: 102 },
-  { id: "city", name: "jordan.k", avatar: suggestions[2].image, image: require("../../../assets/images/profile/grid-city.png"), title: "City lights, bigger dreams ✨", topic: "Design", likes: 210 },
-  { id: "coast", name: "casey.dev", avatar: suggestions[4].image, image: require("../../../assets/images/profile/grid-coast.png"), title: "Find your next horizon 🌊", topic: "Travel", likes: 178 },
-  { id: "coffee", name: "maya.b", avatar: suggestions[1].image, image: require("../../../assets/images/profile/grid-coffee.png"), title: "Good coffee, brighter days ☕", topic: "Food", likes: 95 },
-  { id: "hiker", name: "alex.rivera", avatar: suggestions[0].image, image: require("../../../assets/images/profile/grid-hiker.png"), title: "Take the scenic route 🎒", topic: "Outdoors", likes: 141 },
-  { id: "sunset", name: "jordan.k", avatar: suggestions[2].image, image: require("../../../assets/images/profile/grid-sunset.png"), title: "A little closer to the sky 🌄", topic: "Nature", likes: 163 },
-  { id: "road", name: "taylor.b", avatar: suggestions[3].image, image: require("../../../assets/images/profile/grid-road.png"), title: "Somewhere new feels right ✈️", topic: "Travel", likes: 119 },
-];
-
-function CameraLogo() {
-  return (
-    <View style={styles.logo}>
-      <View style={styles.cameraBody}>
-        <View style={styles.cameraTop} />
-        <View style={styles.cameraLens}><View style={styles.cameraCore} /></View>
-        <View style={styles.cameraDot} />
-      </View>
-    </View>
-  );
-}
 
 function SearchGlyph({ color = colors.muted, size = 22 }: { color?: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Circle cx="10.8" cy="10.8" r="6.8" fill="none" stroke={color} strokeWidth={2} />
-      <Path d="m16 16 4.2 4.2" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  );
+  return <Svg width={size} height={size} viewBox="0 0 24 24"><Circle cx="10.8" cy="10.8" r="6.8" fill="none" stroke={color} strokeWidth={2} /><Path d="m16 16 4.2 4.2" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" /></Svg>;
 }
 
-function FollowSuggestion({ person }: { person: (typeof suggestions)[number] }) {
-  const [following, setFollowing] = useState(false);
+function FollowSuggestion({ person, index }: { person: { _id: Id<"profiles">; username: string; displayName: string; avatarUrl: string | null; isFollowing: boolean }; index: number }) {
+  const [optimisticFollowing, setOptimisticFollowing] = useState<{ base: boolean; value: boolean } | null>(null);
+  const setFollow = useMutation(api.social.setFollow);
+  const following = optimisticFollowing?.base === person.isFollowing ? optimisticFollowing.value : person.isFollowing;
+  const toggle = async () => {
+    const next = !following;
+    setOptimisticFollowing({ base: person.isFollowing, value: next });
+    try { await setFollow({ profileId: person._id, following: next }); }
+    catch { setOptimisticFollowing(null); }
+  };
   return (
     <View style={styles.suggestion}>
-      <View style={[styles.suggestionRing, { borderColor: person.ring }]}>
-        <Image source={person.image} contentFit="cover" style={styles.suggestionAvatar} />
+      <View style={[styles.suggestionRing, { borderColor: rings[index % rings.length] }]}>
+        <Image source={person.avatarUrl ? { uri: person.avatarUrl } : fallbackAvatars[index % fallbackAvatars.length]} contentFit="cover" style={styles.suggestionAvatar} />
       </View>
-      <Text numberOfLines={1} style={styles.suggestionName}>{person.name}</Text>
-      <Text numberOfLines={1} style={styles.suggestionCategory}>{person.category}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ selected: following }}
-        onPress={() => setFollowing((value) => !value)}
-        style={[styles.followButton, following && styles.followingButton]}
-      >
+      <Text numberOfLines={1} style={styles.suggestionName}>{person.username}</Text>
+      <Text numberOfLines={1} style={styles.suggestionCategory}>{person.displayName}</Text>
+      <Pressable accessibilityRole="button" accessibilityState={{ selected: following }} onPress={toggle} style={[styles.followButton, following && styles.followingButton]}>
         <Text style={[styles.followText, following && styles.followingText]}>{following ? "Following" : "Follow"}</Text>
       </Pressable>
     </View>
@@ -98,40 +60,36 @@ function FollowSuggestion({ person }: { person: (typeof suggestions)[number] }) 
 }
 
 function TopicChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.topicChip, selected && styles.selectedTopicChip]}>
-      <Text style={[styles.topicLabel, selected && styles.selectedTopicLabel]}>{label}</Text>
-    </Pressable>
-  );
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.topicChip, selected && styles.selectedTopicChip]}><Text style={[styles.topicLabel, selected && styles.selectedTopicLabel]}>{label}</Text></Pressable>;
 }
 
-function ExploreCard({ post, width }: { post: ExplorePost; width: number }) {
-  const [liked, setLiked] = useState(false);
+function ExploreCard({ post, width }: { post: PostItem; width: number }) {
+  const [optimisticLiked, setOptimisticLiked] = useState<{ base: boolean; value: boolean } | null>(null);
+  const setLike = useMutation(api.social.setLike);
+  const liked = optimisticLiked?.base === post.likedByMe ? optimisticLiked.value : post.likedByMe;
+  const toggleLike = async () => {
+    const next = !liked;
+    setOptimisticLiked({ base: post.likedByMe, value: next });
+    try { await setLike({ postId: post._id, liked: next }); }
+    catch { setOptimisticLiked(null); }
+  };
   return (
-    <View style={[styles.postCard, { width }]}>
+    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/comments/[postId]", params: { postId: post._id } })} style={[styles.postCard, { width }]}>
       <View style={styles.postPhoto}>
-        <Image source={post.image} contentFit="cover" style={StyleSheet.absoluteFill} />
+        {post.mediaType === "image" && post.mediaUrl ? <Image source={{ uri: post.mediaUrl }} contentFit="cover" style={StyleSheet.absoluteFill} /> : <View style={styles.videoTile}><Text style={styles.videoTileText}>{post.mediaType === "video" ? "VIDEO" : "MEDIA"}</Text></View>}
         <View style={styles.photoShade} />
         <View style={styles.photoHeader}>
-          <Image source={post.avatar} contentFit="cover" style={styles.postAvatar} />
-          <Text numberOfLines={1} style={styles.postAuthor}>{post.name}</Text>
-          <View style={styles.postMore}>
-            <Svg width={17} height={17} viewBox="0 0 24 24">
-              <Circle cx="5" cy="12" r="1.5" fill="#FFFFFF" />
-              <Circle cx="12" cy="12" r="1.5" fill="#FFFFFF" />
-              <Circle cx="19" cy="12" r="1.5" fill="#FFFFFF" />
-            </Svg>
-          </View>
+          <Image source={post.author.avatarUrl ? { uri: post.author.avatarUrl } : fallbackAvatars[0]} contentFit="cover" style={styles.postAvatar} />
+          <Text numberOfLines={1} style={styles.postAuthor}>{post.author.username}</Text>
+          {post.mediaType === "video" ? <Text style={styles.videoBadge}>â–¶</Text> : null}
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={liked ? "Unlike post" : "Like post"} onPress={() => setLiked((value) => !value)} style={styles.likeCount}>
-          <Svg width={20} height={20} viewBox="0 0 24 24">
-            <Path d="M20.5 8.7c0 4.1-8.5 10.1-8.5 10.1S3.5 12.8 3.5 8.7a4.4 4.4 0 0 1 8.5-1.6 4.4 4.4 0 0 1 8.5 1.6Z" fill={liked ? "#FF4258" : "none"} stroke="#FFFFFF" strokeWidth={2} strokeLinejoin="round" />
-          </Svg>
-          <Text style={styles.likeText}>{post.likes + (liked ? 1 : 0)}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={liked ? "Unlike post" : "Like post"} onPress={(event) => { event.stopPropagation(); void toggleLike(); }} style={styles.likeCount}>
+          <Svg width={18} height={18} viewBox="0 0 24 24"><Path d="M20.5 8.7c0 4.1-8.5 10.1-8.5 10.1S3.5 12.8 3.5 8.7a4.4 4.4 0 0 1 8.5-1.6 4.4 4.4 0 0 1 8.5 1.6Z" fill={liked ? "#FF4258" : "none"} stroke="#FFFFFF" strokeWidth={2} strokeLinejoin="round" /></Svg>
+          <Text style={styles.likeText}>{post.likesCount + (liked === post.likedByMe ? 0 : liked ? 1 : -1)}</Text>
         </Pressable>
       </View>
-      <Text numberOfLines={2} style={styles.postTitle}>{post.title}</Text>
-    </View>
+      <Text numberOfLines={2} style={styles.postTitle}>{post.caption || post.author.displayName}</Text>
+    </Pressable>
   );
 }
 
@@ -141,66 +99,33 @@ export default function ExploreRoute() {
   const searchRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
   const tileWidth = (width - 22) / 3;
-
+  const { results: posts, status, loadMore } = usePaginatedQuery(api.posts.explore, {}, { initialNumItems: 18 });
+  const suggestions = useQuery(api.profiles.suggestions, {});
   const visiblePosts = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalized = query.trim().toLowerCase();
     return posts.filter((post) => {
-      const matchesTopic = activeTopic === "All" || post.topic === activeTopic;
-      const matchesQuery = !normalizedQuery || `${post.name} ${post.title} ${post.topic}`.toLowerCase().includes(normalizedQuery);
+      const matchesTopic = activeTopic === "All" || `${post.caption ?? ""} ${post.author.username}`.toLowerCase().includes(activeTopic.toLowerCase());
+      const matchesQuery = !normalized || `${post.author.username} ${post.author.displayName} ${post.caption ?? ""}`.toLowerCase().includes(normalized);
       return matchesTopic && matchesQuery;
     });
-  }, [activeTopic, query]);
+  }, [activeTopic, posts, query]);
 
   const listHeader = (
     <>
       <View style={styles.header}>
-        <View style={styles.brand}>
-          <CameraLogo />
-          <Text style={styles.brandName}>Codexgram</Text>
-        </View>
+        <View style={styles.brand}><BrandLogo size={38} /><Text style={styles.brandName}>Codexgram</Text></View>
         <View style={styles.headerActions}>
-          <Pressable accessibilityLabel="Focus search" accessibilityRole="button" onPress={() => searchRef.current?.focus()} style={styles.headerAction}>
-            <SearchGlyph color={colors.ink} size={25} />
-          </Pressable>
-          <Pressable accessibilityLabel="Create post" accessibilityRole="button" style={styles.headerAction}>
-            <Svg width={26} height={26} viewBox="0 0 24 24"><Path d="M12 5v14M5 12h14" fill="none" stroke={colors.blue} strokeWidth={2} strokeLinecap="round" /></Svg>
-          </Pressable>
+          <Pressable accessibilityLabel="Focus search" accessibilityRole="button" onPress={() => searchRef.current?.focus()} style={styles.headerAction}><SearchGlyph color={colors.ink} size={25} /></Pressable>
+          <Pressable accessibilityLabel="Create post" accessibilityRole="button" onPress={() => router.push("/create-post")} style={styles.headerAction}><Svg width={26} height={26} viewBox="0 0 24 24"><Path d="M12 5v14M5 12h14" fill="none" stroke={colors.blue} strokeWidth={2} strokeLinecap="round" /></Svg></Pressable>
         </View>
       </View>
-
-      <View style={styles.searchBar}>
-        <SearchGlyph />
-        <TextInput
-          ref={searchRef}
-          accessibilityLabel="Search people, posts, or topics"
-          onChangeText={setQuery}
-          placeholder="Search people, posts, or topics..."
-          placeholderTextColor={colors.muted}
-          returnKeyType="search"
-          style={styles.searchInput}
-          value={query}
-        />
-      </View>
-
-      <View style={styles.sectionHeading}>
-        <Text style={styles.sectionTitle}>Suggested for you</Text>
-        <Pressable accessibilityRole="button" style={styles.seeAll}>
-          <Text style={styles.seeAllText}>See all</Text>
-          <Svg width={16} height={16} viewBox="0 0 24 24"><Path d="m9 5 7 7-7 7" fill="none" stroke={colors.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
-        </Pressable>
-      </View>
-
+      <View style={styles.searchBar}><SearchGlyph /><TextInput ref={searchRef} accessibilityLabel="Search people or posts" onChangeText={setQuery} placeholder="Search people or posts..." placeholderTextColor={colors.muted} returnKeyType="search" style={styles.searchInput} value={query} /></View>
+      <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Suggested for you</Text><Text style={styles.seeAllText}>People to follow</Text></View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsRow}>
-        {suggestions.map((person) => <FollowSuggestion key={person.id} person={person} />)}
+        {suggestions?.map((person, index) => <FollowSuggestion key={person._id} person={person} index={index} />)}
       </ScrollView>
-
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topicsRow}>
-        {topics.slice(0, 7).map((topic) => (
-          <TopicChip key={topic} label={topic} selected={activeTopic === topic} onPress={() => setActiveTopic(topic)} />
-        ))}
-        <Pressable accessibilityLabel="More topics" accessibilityRole="button" style={styles.moreTopics}>
-          <Svg width={18} height={18} viewBox="0 0 24 24"><Path d="m6 9 6 6 6-6" fill="none" stroke="#46536A" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
-        </Pressable>
+        {topics.slice(0, 7).map((topic) => <TopicChip key={topic} label={topic} selected={activeTopic === topic} onPress={() => setActiveTopic(topic)} />)}
       </ScrollView>
     </>
   );
@@ -209,64 +134,22 @@ export default function ExploreRoute() {
     <SafeAreaView edges={["top"]} style={styles.screen}>
       <FlatList
         data={visiblePosts}
-        keyExtractor={(post) => post.id}
+        keyExtractor={(post) => post._id}
         numColumns={3}
         renderItem={({ item }) => <ExploreCard post={item} width={tileWidth} />}
         ListHeaderComponent={listHeader}
+        ListEmptyComponent={<View style={styles.empty}>{status === "LoadingFirstPage" ? <ActivityIndicator color={colors.blue} /> : <Text style={styles.emptyText}>No posts to explore yet. Share the first one!</Text>}</View>}
         contentContainerStyle={styles.gridContent}
-        columnWrapperStyle={styles.gridRow}
+        columnWrapperStyle={visiblePosts.length ? styles.gridRow : undefined}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onEndReached={() => { if (status === "CanLoadMore") loadMore(18); }}
+        onEndReachedThreshold={0.5}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.white },
-  header: { height: 56, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
-  logo: { width: 38, height: 38, borderRadius: 11, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" },
-  cameraBody: { width: 25, height: 20, borderRadius: 6, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
-  cameraTop: { position: "absolute", left: 4, top: -3, width: 8, height: 4, borderTopLeftRadius: 3, borderTopRightRadius: 3, backgroundColor: colors.white },
-  cameraLens: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#1A2A61", alignItems: "center", justifyContent: "center" },
-  cameraCore: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#4F86FF", borderWidth: 1.5, borderColor: "#B8D2FF" },
-  cameraDot: { position: "absolute", right: 3, top: 4, width: 2.5, height: 2.5, borderRadius: 2, backgroundColor: "#4F5EFF" },
-  brandName: { color: colors.ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.45 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-  headerAction: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" },
-  searchBar: { height: 48, marginHorizontal: 18, marginTop: 8, marginBottom: 16, paddingHorizontal: 15, borderRadius: 25, backgroundColor: colors.pale, flexDirection: "row", alignItems: "center", gap: 11 },
-  searchInput: { flex: 1, height: "100%", padding: 0, color: colors.ink, fontSize: 14 },
-  sectionHeading: { height: 26, marginBottom: 8, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: "700" },
-  seeAll: { flexDirection: "row", alignItems: "center", gap: 3 },
-  seeAllText: { color: colors.blue, fontSize: 13, fontWeight: "600" },
-  suggestionsRow: { paddingHorizontal: 12, gap: 8, paddingBottom: 11 },
-  suggestion: { width: 83, alignItems: "center" },
-  suggestionRing: { width: 58, height: 58, padding: 2, borderRadius: 29, borderWidth: 2, alignItems: "center", justifyContent: "center", backgroundColor: colors.white },
-  suggestionAvatar: { width: 50, height: 50, borderRadius: 25 },
-  suggestionName: { width: 83, marginTop: 3, color: colors.ink, fontSize: 10.5, lineHeight: 14, textAlign: "center", fontWeight: "600" },
-  suggestionCategory: { width: 83, marginTop: 1, color: colors.muted, fontSize: 9.5, lineHeight: 13, textAlign: "center" },
-  followButton: { width: 68, height: 25, marginTop: 5, borderRadius: 14, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" },
-  followText: { color: colors.white, fontSize: 10.5, lineHeight: 13, fontWeight: "600" },
-  followingButton: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
-  followingText: { color: colors.ink },
-  topicsRow: { paddingHorizontal: 12, gap: 6, paddingTop: 3, paddingBottom: 10, alignItems: "center" },
-  topicChip: { height: 32, minWidth: 48, paddingHorizontal: 13, borderRadius: 18, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" },
-  selectedTopicChip: { backgroundColor: colors.blue },
-  topicLabel: { color: "#526079", fontSize: 11.5, lineHeight: 15 },
-  selectedTopicLabel: { color: colors.white, fontWeight: "600" },
-  moreTopics: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" },
-  gridContent: { paddingHorizontal: 6, paddingBottom: 12 },
-  gridRow: { gap: 5, marginBottom: 7 },
-  postCard: { overflow: "hidden", borderRadius: 11, backgroundColor: colors.white, shadowColor: "#17233B", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  postPhoto: { width: "100%", aspectRatio: 0.78, position: "relative", overflow: "hidden", justifyContent: "space-between" },
-  photoShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(5, 15, 35, 0.10)" },
-  photoHeader: { height: 34, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(17, 28, 49, 0.16)" },
-  postAvatar: { width: 23, height: 23, borderRadius: 12, borderWidth: 1.5, borderColor: colors.white },
-  postAuthor: { flex: 1, marginLeft: 4, color: colors.white, fontSize: 9, fontWeight: "700" },
-  postMore: { width: 19, height: 24, alignItems: "center", justifyContent: "center" },
-  likeCount: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingBottom: 7 },
-  likeText: { color: colors.white, fontSize: 11, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.55)", textShadowRadius: 3 },
-  postTitle: { minHeight: 43, paddingHorizontal: 6, paddingTop: 5, paddingBottom: 6, color: colors.ink, fontSize: 10.5, lineHeight: 14, fontWeight: "500" },
+  screen: { flex: 1, backgroundColor: colors.white }, header: { height: 56, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, brand: { flexDirection: "row", alignItems: "center", gap: 10 }, brandName: { color: colors.ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.45 }, headerActions: { flexDirection: "row", alignItems: "center", gap: 10 }, headerAction: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" }, searchBar: { height: 48, marginHorizontal: 18, marginTop: 8, marginBottom: 16, paddingHorizontal: 15, borderRadius: 25, backgroundColor: colors.pale, flexDirection: "row", alignItems: "center", gap: 11 }, searchInput: { flex: 1, height: "100%", padding: 0, color: colors.ink, fontSize: 14 }, sectionHeading: { height: 26, marginBottom: 8, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: "700" }, seeAllText: { color: colors.blue, fontSize: 12, fontWeight: "600" }, suggestionsRow: { paddingHorizontal: 12, gap: 8, paddingBottom: 11 }, suggestion: { width: 83, alignItems: "center" }, suggestionRing: { width: 58, height: 58, padding: 2, borderRadius: 29, borderWidth: 2, alignItems: "center", justifyContent: "center", backgroundColor: colors.white }, suggestionAvatar: { width: 50, height: 50, borderRadius: 25 }, suggestionName: { width: 83, marginTop: 3, color: colors.ink, fontSize: 10.5, lineHeight: 14, textAlign: "center", fontWeight: "600" }, suggestionCategory: { width: 83, marginTop: 1, color: colors.muted, fontSize: 9.5, lineHeight: 13, textAlign: "center" }, followButton: { width: 68, height: 25, marginTop: 5, borderRadius: 14, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" }, followText: { color: colors.white, fontSize: 10.5, lineHeight: 13, fontWeight: "600" }, followingButton: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white }, followingText: { color: colors.ink }, topicsRow: { paddingHorizontal: 12, gap: 6, paddingTop: 3, paddingBottom: 10, alignItems: "center" }, topicChip: { height: 32, minWidth: 48, paddingHorizontal: 13, borderRadius: 18, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" }, selectedTopicChip: { backgroundColor: colors.blue }, topicLabel: { color: "#526079", fontSize: 11.5, lineHeight: 15 }, selectedTopicLabel: { color: colors.white, fontWeight: "600" }, gridContent: { paddingHorizontal: 6, paddingBottom: 12 }, gridRow: { gap: 5, marginBottom: 7 }, postCard: { overflow: "hidden", borderRadius: 11, backgroundColor: colors.white, shadowColor: "#17233B", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }, postPhoto: { width: "100%", aspectRatio: 0.78, position: "relative", overflow: "hidden", justifyContent: "space-between" }, photoShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(5, 15, 35, 0.10)" }, videoTile: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#253757" }, videoTileText: { color: colors.white, fontWeight: "700", fontSize: 12 }, photoHeader: { height: 34, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(17, 28, 49, 0.16)" }, postAvatar: { width: 23, height: 23, borderRadius: 12, borderWidth: 1.5, borderColor: colors.white }, postAuthor: { flex: 1, marginLeft: 4, color: colors.white, fontSize: 9, fontWeight: "700" }, videoBadge: { color: colors.white, fontSize: 10 }, likeCount: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingBottom: 7 }, likeText: { color: colors.white, fontSize: 11, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.55)", textShadowRadius: 3 }, postTitle: { minHeight: 43, paddingHorizontal: 6, paddingTop: 5, paddingBottom: 6, color: colors.ink, fontSize: 10.5, lineHeight: 14, fontWeight: "500" }, empty: { minHeight: 180, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }, emptyText: { color: colors.muted, fontSize: 14, textAlign: "center" },
 });

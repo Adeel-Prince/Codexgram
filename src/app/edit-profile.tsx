@@ -17,6 +17,8 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 type EditableProfile = {
   username?: string;
@@ -127,6 +129,7 @@ export default function EditProfileRoute() {
 }
 
 function EditProfileForm({ user }: { user: ClerkUser }) {
+  const updateConvexProfile = useMutation(api.profiles.updateMyProfile);
   const profile = user.unsafeMetadata?.codexgramProfile as EditableProfile | undefined;
   const [username, setUsername] = useState(profile?.username || user.username || "alex.rivera");
   const [displayName, setDisplayName] = useState(user.fullName || "Alex Rivera");
@@ -185,6 +188,7 @@ function EditProfileForm({ user }: { user: ClerkUser }) {
         },
       });
       if (photoUri) await user.setProfileImage({ file: photoUri });
+      await updateConvexProfile({ username: cleanUsername, displayName: cleanDisplayName, bio: bio.trim() });
       router.back();
     } catch (cause) {
       const clerkError = cause as { errors?: { longMessage?: string; message?: string }[] };

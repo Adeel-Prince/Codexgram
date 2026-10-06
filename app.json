@@ -29,8 +29,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Codexgram to access your photos so you can choose a profile picture.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "cameraPermission": "Allow Codexgram to use your camera to capture posts.",
+          "microphonePermission": "Allow Codexgram to record audio in your videos."
         }
       ],
       "expo-secure-store",
@@ -42,7 +42,8 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

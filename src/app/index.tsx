@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth, useSignIn, useSignUp } from "@clerk/expo";
 import { useHostedAuth } from "@clerk/expo/hosted-auth";
 import { Redirect } from "expo-router";
+import { BrandLogo } from "../components/BrandLogo";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -343,15 +344,7 @@ export default function Index() {
               </Pressable>
             </View>
 
-            <View style={styles.brandMark}>
-              <View style={styles.cameraBody}>
-                <View style={styles.cameraTop} />
-                <View style={styles.cameraLens}>
-                  <View style={styles.cameraCore} />
-                </View>
-                <View style={styles.cameraSpark} />
-              </View>
-            </View>
+            <BrandLogo size={74} style={styles.brandMark} />
 
             <Text style={styles.title}>
               {authMode === "verify" ? "Verify your email" : authMode === "sign-in" ? "Sign in" : "Create account"}
@@ -514,64 +507,13 @@ const styles = StyleSheet.create({
   },
   brandMark: {
     alignSelf: "center",
-    width: 74,
-    height: 74,
     marginTop: 8,
     marginBottom: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    borderRadius: 22,
-    backgroundColor: "#5147F5",
-    shadowColor: "#6048FF",
+    shadowColor: "#1684FF",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.24,
     shadowRadius: 9,
     elevation: 5,
-  },
-  cameraBody: {
-    width: 50,
-    height: 40,
-    marginTop: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 11,
-    backgroundColor: "#F7FAFF",
-  },
-  cameraTop: {
-    position: "absolute",
-    top: -5,
-    left: 8,
-    width: 14,
-    height: 7,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    backgroundColor: "#F7FAFF",
-  },
-  cameraLens: {
-    width: 26,
-    height: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 13,
-    backgroundColor: "#222C62",
-  },
-  cameraCore: {
-    width: 13,
-    height: 13,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: "#91B9FF",
-    backgroundColor: "#5368D9",
-  },
-  cameraSpark: {
-    position: "absolute",
-    right: 5,
-    top: 7,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#6A56FF",
   },
   title: {
     color: colors.ink,

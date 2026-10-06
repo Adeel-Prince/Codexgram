@@ -1,10 +1,12 @@
-import { ClerkProvider } from "@clerk/expo";
+import { ClerkProvider, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { Stack } from "expo-router";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
+import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet, View } from "react-native";
+import { convex } from "../lib/convex";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
 
@@ -17,12 +19,14 @@ void SystemUI.setBackgroundColorAsync("#FFFFFF");
 export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <View style={styles.appBackground}>
-        <SafeAreaProvider>
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }} />
-        </SafeAreaProvider>
-      </View>
+      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+        <View style={styles.appBackground}>
+          <SafeAreaProvider>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false }} />
+          </SafeAreaProvider>
+        </View>
+      </ConvexProviderWithClerk>
     </ClerkProvider>
   );
 }
