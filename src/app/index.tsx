@@ -1,5 +1,9 @@
 import { useState } from "react";
+import { useAuth, useSignIn, useSignUp } from "@clerk/expo";
+import { useHostedAuth } from "@clerk/expo/hosted-auth";
+import { Redirect } from "expo-router";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,7 +23,23 @@ const colors = {
   border: "#E4EAF4",
   primary: "#554BFF",
   white: "#FFFFFF",
+  error: "#C62828",
 };
+
+type AuthMode = "sign-up" | "sign-in" | "verify";
+
+function clerkErrorMessage(error: unknown) {
+  if (error && typeof error === "object" && "errors" in error) {
+    const messages = (error as { errors?: { longMessage?: string; message?: string }[] }).errors
+      ?.map((item) => item.longMessage || item.message)
+      .filter(Boolean);
+
+    if (messages?.length) return messages.join("\n");
+  }
+
+  if (error instanceof Error) return error.message;
+  return "Something went wrong. Please try again.";
+}
 
 type FieldProps = {
   icon: "person" | "mail" | "lock";
@@ -27,7 +47,7 @@ type FieldProps = {
   value: string;
   onChangeText: (value: string) => void;
   secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address";
+  keyboardType?: "default" | "email-address" | "numeric";
   trailing?: React.ReactNode;
 };
 
@@ -143,9 +163,22 @@ function Field({
   );
 }
 
-function SocialButton({ provider }: { provider: "Google" | "Apple" }) {
+function SocialButton({
+  provider,
+  onPress,
+  disabled,
+}: {
+  provider: "Google" | "Apple";
+  onPress: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable accessibilityRole="button" style={styles.socialButton}>
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.socialButton, disabled && styles.disabledButton]}
+    >
       {provider === "Google" ? (
         <GoogleMark />
       ) : (
@@ -157,10 +190,133 @@ function SocialButton({ provider }: { provider: "Google" | "Apple" }) {
 }
 
 export default function Index() {
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { signIn } = useSignIn();
+  const { signUp } = useSignUp();
+  const { startHostedAuth } = useHostedAuth();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("sign-up");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const submitSignUp = async () => {
+    if (!signUp) return;
+    const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
+
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+      const { error } = await signUp.password({
+        emailAddress: email.trim(),
+        password,
+        firstName,
+        lastName: lastNameParts.join(" ") || undefined,
+      });
+
+      if (error) {
+        setErrorMessage(clerkErrorMessage(error));
+        return;
+      }
+
+      if (signUp.status === "complete") {
+        const { error: finalizeError } = await signUp.finalize();
+        if (finalizeError) setErrorMessage(clerkErrorMessage(finalizeError));
+        return;
+      }
+
+      const { error: verificationError } = await signUp.verifications.sendEmailCode();
+      if (verificationError) {
+        setErrorMessage(clerkErrorMessage(verificationError));
+        return;
+      }
+
+      setAuthMode("verify");
+    } catch (error) {
+      setErrorMessage(clerkErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const submitSignIn = async () => {
+    if (!signIn) return;
+
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+      const { error } = await signIn.password({ emailAddress: email.trim(), password });
+
+      if (error) {
+        setErrorMessage(clerkErrorMessage(error));
+        return;
+      }
+
+      if (signIn.status === "complete") {
+        const { error: finalizeError } = await signIn.finalize();
+        if (finalizeError) setErrorMessage(clerkErrorMessage(finalizeError));
+        return;
+      }
+
+      setErrorMessage("Your account needs another verification step. Continue with Clerk sign-in.");
+    } catch (error) {
+      setErrorMessage(clerkErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const verifyEmail = async () => {
+    if (!signUp) return;
+
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+      const { error } = await signUp.verifications.verifyEmailCode({ code: verificationCode.trim() });
+
+      if (error) {
+        setErrorMessage(clerkErrorMessage(error));
+        return;
+      }
+
+      const { error: finalizeError } = await signUp.finalize();
+      if (finalizeError) setErrorMessage(clerkErrorMessage(finalizeError));
+    } catch (error) {
+      setErrorMessage(clerkErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openHostedAuth = async () => {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+      await startHostedAuth({ mode: authMode === "sign-in" ? "sign-in" : "sign-up" });
+    } catch (error) {
+      setErrorMessage(clerkErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!authLoaded) {
+    return (
+      <SafeAreaView edges={["top"]} style={styles.screen}>
+        <View style={styles.loadingState}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isSignedIn) {
+    return <Redirect href="/(tabs)/home" />;
+  }
 
   return (
     <SafeAreaView edges={["top"]} style={styles.screen}>
@@ -174,7 +330,15 @@ export default function Index() {
         >
           <View style={styles.card}>
             <View style={styles.topBar}>
-              <Pressable accessibilityLabel="Go back" hitSlop={12} style={styles.backButton}>
+              <Pressable
+                accessibilityLabel="Back to create account"
+                hitSlop={12}
+                onPress={() => {
+                  setErrorMessage("");
+                  setAuthMode("sign-up");
+                }}
+                style={styles.backButton}
+              >
                 <Text style={styles.backChevron}>‹</Text>
               </Pressable>
             </View>
@@ -189,59 +353,111 @@ export default function Index() {
               </View>
             </View>
 
-            <Text style={styles.title}>Create account</Text>
-            <Text style={styles.subtitle}>Join Codexgram</Text>
+            <Text style={styles.title}>
+              {authMode === "verify" ? "Verify your email" : authMode === "sign-in" ? "Sign in" : "Create account"}
+            </Text>
+            <Text style={styles.subtitle}>
+              {authMode === "verify"
+                ? `Enter the code sent to ${email}`
+                : authMode === "sign-in"
+                  ? "Welcome back to Codexgram"
+                  : "Join Codexgram"}
+            </Text>
 
             <View style={styles.fields}>
-              <Field icon="person" placeholder="Full name" value={name} onChangeText={setName} />
-              <Field
-                icon="mail"
-                keyboardType="email-address"
-                placeholder="Email address"
-                value={email}
-                onChangeText={setEmail}
-              />
-              <Field
-                icon="lock"
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                trailing={
-                  <Pressable
-                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                    accessibilityRole="button"
-                    hitSlop={8}
-                    onPress={() => setShowPassword((shown) => !shown)}
-                    style={styles.eyeButton}
-                  >
-                    <PasswordEye visible={showPassword} />
-                  </Pressable>
-                }
-              />
+              {authMode === "verify" ? (
+                <Field
+                  icon="mail"
+                  keyboardType="numeric"
+                  placeholder="Verification code"
+                  value={verificationCode}
+                  onChangeText={setVerificationCode}
+                />
+              ) : (
+                <>
+                  {authMode === "sign-up" ? (
+                    <Field icon="person" placeholder="Full name" value={name} onChangeText={setName} />
+                  ) : null}
+                  <Field
+                    icon="mail"
+                    keyboardType="email-address"
+                    placeholder="Email address"
+                    value={email}
+                    onChangeText={setEmail}
+                  />
+                  <Field
+                    icon="lock"
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    trailing={
+                      <Pressable
+                        accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                        accessibilityRole="button"
+                        hitSlop={8}
+                        onPress={() => setShowPassword((shown) => !shown)}
+                        style={styles.eyeButton}
+                      >
+                        <PasswordEye visible={showPassword} />
+                      </Pressable>
+                    }
+                  />
+                </>
+              )}
             </View>
 
-            <Pressable accessibilityRole="button" style={styles.primaryButton}>
-              <Text style={styles.primaryLabel}>Create account</Text>
+            {errorMessage ? <Text style={styles.formMessage}>{errorMessage}</Text> : null}
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSubmitting}
+              onPress={authMode === "verify" ? verifyEmail : authMode === "sign-in" ? submitSignIn : submitSignUp}
+              style={[styles.primaryButton, isSubmitting && styles.disabledButton]}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.primaryLabel}>
+                  {authMode === "verify" ? "Verify email" : authMode === "sign-in" ? "Sign in" : "Create account"}
+                </Text>
+              )}
             </Pressable>
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.orLabel}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
+            {authMode !== "verify" ? (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.orLabel}>or</Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-            <View style={styles.socialButtons}>
-              <SocialButton provider="Google" />
-              <SocialButton provider="Apple" />
-            </View>
+                <View style={styles.socialButtons}>
+                  <SocialButton disabled={isSubmitting} onPress={openHostedAuth} provider="Google" />
+                  <SocialButton disabled={isSubmitting} onPress={openHostedAuth} provider="Apple" />
+                </View>
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Already have an account? </Text>
-              <Pressable accessibilityRole="button">
-                <Text style={styles.signInText}>Sign In</Text>
+                <View style={styles.footer}>
+                  <Text style={styles.footerText}>
+                    {authMode === "sign-in" ? "Don't have an account? " : "Already have an account? "}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isSubmitting}
+                    onPress={() => {
+                      setErrorMessage("");
+                      setAuthMode(authMode === "sign-in" ? "sign-up" : "sign-in");
+                    }}
+                  >
+                    <Text style={styles.signInText}>{authMode === "sign-in" ? "Sign Up" : "Sign In"}</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <Pressable onPress={() => setAuthMode("sign-up")} style={styles.footer}>
+                <Text style={styles.signInText}>Use a different email</Text>
               </Pressable>
-            </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -253,6 +469,14 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signedInCard: {
+    justifyContent: "center",
   },
   keyboardArea: {
     flex: 1,
@@ -483,6 +707,16 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 13,
     fontWeight: "700",
+  },
+  formMessage: {
+    marginTop: 12,
+    color: colors.error,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+  },
+  disabledButton: {
+    opacity: 0.65,
   },
   divider: {
     flexDirection: "row",

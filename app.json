@@ -26,6 +26,16 @@
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Codexgram to access your photos so you can choose a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store",
+      "@clerk/expo",
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
