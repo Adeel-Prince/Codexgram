@@ -23,6 +23,7 @@ import type { PostItem } from "../../components/PostCard";
 const colors = { ink: "#101B32", muted: "#78859E", blue: "#1677F8", line: "#E7EBF2", pale: "#F1F4F9", white: "#FFFFFF" };
 const topics = ["All", "Travel", "Nature", "Pets", "Food", "Design", "Lifestyle", "Photography", "Outdoors"];
 const rings = ["#1684FF", "#E84390", "#A279FF", "#26BDD0", "#72A4F6"];
+const creatorCategories: Record<string, string> = { alex: "Travel & Nature", maya: "Lifestyle", jordan: "Photography", taylor: "Food & Coffee", casey: "Outdoor Life" };
 const fallbackAvatars = [
   require("../../../assets/images/feed/alex.png"),
   require("../../../assets/images/feed/maya.png"),
@@ -33,6 +34,14 @@ const fallbackAvatars = [
 
 function SearchGlyph({ color = colors.muted, size = 22 }: { color?: string; size?: number }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24"><Circle cx="10.8" cy="10.8" r="6.8" fill="none" stroke={color} strokeWidth={2} /><Path d="m16 16 4.2 4.2" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" /></Svg>;
+}
+
+function MoreGlyph() {
+  return <Svg width={19} height={19} viewBox="0 0 24 24"><Circle cx="5" cy="12" r="1.6" fill="#FFFFFF" /><Circle cx="12" cy="12" r="1.6" fill="#FFFFFF" /><Circle cx="19" cy="12" r="1.6" fill="#FFFFFF" /></Svg>;
+}
+
+function ChevronGlyph({ up = false }: { up?: boolean }) {
+  return <Svg width={17} height={17} viewBox="0 0 24 24"><Path d={up ? "m6 14 6-6 6 6" : "m6 9 6 6 6-6"} fill="none" stroke="#586782" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 }
 
 function FollowSuggestion({ person, index }: { person: { _id: Id<"profiles">; username: string; displayName: string; avatarUrl: string | null; isFollowing: boolean }; index: number }) {
@@ -51,7 +60,7 @@ function FollowSuggestion({ person, index }: { person: { _id: Id<"profiles">; us
         <Image source={person.avatarUrl ? { uri: person.avatarUrl } : fallbackAvatars[index % fallbackAvatars.length]} contentFit="cover" style={styles.suggestionAvatar} />
       </View>
       <Text numberOfLines={1} style={styles.suggestionName}>{person.username}</Text>
-      <Text numberOfLines={1} style={styles.suggestionCategory}>{person.displayName}</Text>
+      <Text numberOfLines={1} style={styles.suggestionCategory}>{creatorCategories[person.username.replace(/^demo\./, "").split(/[._]/)[0]] ?? "Creator"}</Text>
       <Pressable accessibilityRole="button" accessibilityState={{ selected: following }} onPress={toggle} style={[styles.followButton, following && styles.followingButton]}>
         <Text style={[styles.followText, following && styles.followingText]}>{following ? "Following" : "Follow"}</Text>
       </Pressable>
@@ -81,7 +90,8 @@ function ExploreCard({ post, width }: { post: PostItem; width: number }) {
         <View style={styles.photoHeader}>
           <Image source={post.author.avatarUrl ? { uri: post.author.avatarUrl } : fallbackAvatars[0]} contentFit="cover" style={styles.postAvatar} />
           <Text numberOfLines={1} style={styles.postAuthor}>{post.author.username}</Text>
-          {post.mediaType === "video" ? <Text style={styles.videoBadge}>â–¶</Text> : null}
+          {post.mediaType === "video" ? <Text style={styles.videoBadge}>{"\u25B6"}</Text> : null}
+          <MoreGlyph />
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={liked ? "Unlike post" : "Like post"} onPress={(event) => { event.stopPropagation(); void toggleLike(); }} style={styles.likeCount}>
           <Svg width={18} height={18} viewBox="0 0 24 24"><Path d="M20.5 8.7c0 4.1-8.5 10.1-8.5 10.1S3.5 12.8 3.5 8.7a4.4 4.4 0 0 1 8.5-1.6 4.4 4.4 0 0 1 8.5 1.6Z" fill={liked ? "#FF4258" : "none"} stroke="#FFFFFF" strokeWidth={2} strokeLinejoin="round" /></Svg>
@@ -96,6 +106,8 @@ function ExploreCard({ post, width }: { post: PostItem; width: number }) {
 export default function ExploreRoute() {
   const [activeTopic, setActiveTopic] = useState("All");
   const [query, setQuery] = useState("");
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+  const [showAllTopics, setShowAllTopics] = useState(false);
   const searchRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
   const tileWidth = (width - 22) / 3;
@@ -107,7 +119,7 @@ export default function ExploreRoute() {
       const matchesTopic = activeTopic === "All" || `${post.caption ?? ""} ${post.author.username}`.toLowerCase().includes(activeTopic.toLowerCase());
       const matchesQuery = !normalized || `${post.author.username} ${post.author.displayName} ${post.caption ?? ""}`.toLowerCase().includes(normalized);
       return matchesTopic && matchesQuery;
-    });
+    }).sort((first, second) => Number(first.mediaType === "video") - Number(second.mediaType === "video"));
   }, [activeTopic, posts, query]);
 
   const listHeader = (
@@ -119,13 +131,20 @@ export default function ExploreRoute() {
           <Pressable accessibilityLabel="Create post" accessibilityRole="button" onPress={() => router.push("/create-post")} style={styles.headerAction}><Svg width={26} height={26} viewBox="0 0 24 24"><Path d="M12 5v14M5 12h14" fill="none" stroke={colors.blue} strokeWidth={2} strokeLinecap="round" /></Svg></Pressable>
         </View>
       </View>
-      <View style={styles.searchBar}><SearchGlyph /><TextInput ref={searchRef} accessibilityLabel="Search people or posts" onChangeText={setQuery} placeholder="Search people or posts..." placeholderTextColor={colors.muted} returnKeyType="search" style={styles.searchInput} value={query} /></View>
-      <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Suggested for you</Text><Text style={styles.seeAllText}>People to follow</Text></View>
+      <View style={styles.searchBar}><SearchGlyph /><TextInput ref={searchRef} accessibilityLabel="Search people, posts, or topics" onChangeText={setQuery} placeholder="Search people, posts, or topics..." placeholderTextColor={colors.muted} returnKeyType="search" style={styles.searchInput} value={query} /></View>
+      <View style={styles.sectionHeading}>
+        <Text style={styles.sectionTitle}>Suggested for you</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={showAllSuggestions ? "Show fewer suggestions" : "See all suggestions"} onPress={() => setShowAllSuggestions((value) => !value)} style={styles.seeAllButton}>
+          <Text style={styles.seeAllText}>{showAllSuggestions ? "See less" : "See all"}</Text>
+          <Svg width={16} height={16} viewBox="0 0 24 24"><Path d="m9 5 7 7-7 7" fill="none" stroke={colors.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+        </Pressable>
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsRow}>
-        {suggestions?.map((person, index) => <FollowSuggestion key={person._id} person={person} index={index} />)}
+        {suggestions?.slice(0, showAllSuggestions ? undefined : 5).map((person, index) => <FollowSuggestion key={person._id} person={person} index={index} />)}
       </ScrollView>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topicsRow}>
-        {topics.slice(0, 7).map((topic) => <TopicChip key={topic} label={topic} selected={activeTopic === topic} onPress={() => setActiveTopic(topic)} />)}
+        {(showAllTopics ? topics : topics.slice(0, 7)).map((topic) => <TopicChip key={topic} label={topic} selected={activeTopic === topic} onPress={() => setActiveTopic(topic)} />)}
+        <Pressable accessibilityRole="button" accessibilityLabel={showAllTopics ? "Show fewer topics" : "Show more topics"} onPress={() => setShowAllTopics((value) => !value)} style={styles.topicExpand}><ChevronGlyph up={showAllTopics} /></Pressable>
       </ScrollView>
     </>
   );
@@ -151,5 +170,48 @@ export default function ExploreRoute() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.white }, header: { height: 56, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, brand: { flexDirection: "row", alignItems: "center", gap: 10 }, brandName: { color: colors.ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.45 }, headerActions: { flexDirection: "row", alignItems: "center", gap: 10 }, headerAction: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" }, searchBar: { height: 48, marginHorizontal: 18, marginTop: 8, marginBottom: 16, paddingHorizontal: 15, borderRadius: 25, backgroundColor: colors.pale, flexDirection: "row", alignItems: "center", gap: 11 }, searchInput: { flex: 1, height: "100%", padding: 0, color: colors.ink, fontSize: 14 }, sectionHeading: { height: 26, marginBottom: 8, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: "700" }, seeAllText: { color: colors.blue, fontSize: 12, fontWeight: "600" }, suggestionsRow: { paddingHorizontal: 12, gap: 8, paddingBottom: 11 }, suggestion: { width: 83, alignItems: "center" }, suggestionRing: { width: 58, height: 58, padding: 2, borderRadius: 29, borderWidth: 2, alignItems: "center", justifyContent: "center", backgroundColor: colors.white }, suggestionAvatar: { width: 50, height: 50, borderRadius: 25 }, suggestionName: { width: 83, marginTop: 3, color: colors.ink, fontSize: 10.5, lineHeight: 14, textAlign: "center", fontWeight: "600" }, suggestionCategory: { width: 83, marginTop: 1, color: colors.muted, fontSize: 9.5, lineHeight: 13, textAlign: "center" }, followButton: { width: 68, height: 25, marginTop: 5, borderRadius: 14, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" }, followText: { color: colors.white, fontSize: 10.5, lineHeight: 13, fontWeight: "600" }, followingButton: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white }, followingText: { color: colors.ink }, topicsRow: { paddingHorizontal: 12, gap: 6, paddingTop: 3, paddingBottom: 10, alignItems: "center" }, topicChip: { height: 32, minWidth: 48, paddingHorizontal: 13, borderRadius: 18, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" }, selectedTopicChip: { backgroundColor: colors.blue }, topicLabel: { color: "#526079", fontSize: 11.5, lineHeight: 15 }, selectedTopicLabel: { color: colors.white, fontWeight: "600" }, gridContent: { paddingHorizontal: 6, paddingBottom: 12 }, gridRow: { gap: 5, marginBottom: 7 }, postCard: { overflow: "hidden", borderRadius: 11, backgroundColor: colors.white, shadowColor: "#17233B", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }, postPhoto: { width: "100%", aspectRatio: 0.78, position: "relative", overflow: "hidden", justifyContent: "space-between" }, photoShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(5, 15, 35, 0.10)" }, videoTile: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#253757" }, videoTileText: { color: colors.white, fontWeight: "700", fontSize: 12 }, photoHeader: { height: 34, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(17, 28, 49, 0.16)" }, postAvatar: { width: 23, height: 23, borderRadius: 12, borderWidth: 1.5, borderColor: colors.white }, postAuthor: { flex: 1, marginLeft: 4, color: colors.white, fontSize: 9, fontWeight: "700" }, videoBadge: { color: colors.white, fontSize: 10 }, likeCount: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingBottom: 7 }, likeText: { color: colors.white, fontSize: 11, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.55)", textShadowRadius: 3 }, postTitle: { minHeight: 43, paddingHorizontal: 6, paddingTop: 5, paddingBottom: 6, color: colors.ink, fontSize: 10.5, lineHeight: 14, fontWeight: "500" }, empty: { minHeight: 180, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }, emptyText: { color: colors.muted, fontSize: 14, textAlign: "center" },
+  screen: { flex: 1, backgroundColor: colors.white },
+  header: { height: 52, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  brand: { flexDirection: "row", alignItems: "center", gap: 9 },
+  brandName: { color: colors.ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.45 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerAction: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" },
+  searchBar: { height: 42, marginHorizontal: 18, marginTop: 4, marginBottom: 15, paddingHorizontal: 15, borderRadius: 24, backgroundColor: colors.pale, flexDirection: "row", alignItems: "center", gap: 11 },
+  searchInput: { flex: 1, height: "100%", padding: 0, color: colors.ink, fontSize: 14 },
+  sectionHeading: { height: 26, marginBottom: 8, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: "700" },
+  seeAllButton: { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 4 },
+  seeAllText: { color: colors.blue, fontSize: 12, fontWeight: "600" },
+  suggestionsRow: { paddingHorizontal: 0, gap: 0, paddingBottom: 11 },
+  suggestion: { width: 74, alignItems: "center" },
+  suggestionRing: { width: 58, height: 58, padding: 2, borderRadius: 29, borderWidth: 2, alignItems: "center", justifyContent: "center", backgroundColor: colors.white },
+  suggestionAvatar: { width: 50, height: 50, borderRadius: 25 },
+  suggestionName: { width: 74, marginTop: 3, color: colors.ink, fontSize: 10.5, lineHeight: 14, textAlign: "center", fontWeight: "600" },
+  suggestionCategory: { width: 74, marginTop: 1, color: colors.muted, fontSize: 9.5, lineHeight: 13, textAlign: "center" },
+  followButton: { width: 62, height: 25, marginTop: 5, borderRadius: 14, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" },
+  followText: { color: colors.white, fontSize: 10.5, lineHeight: 13, fontWeight: "600" },
+  followingButton: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
+  followingText: { color: colors.ink },
+  topicsRow: { paddingHorizontal: 4, gap: 3, paddingTop: 3, paddingBottom: 10, alignItems: "center" },
+  topicChip: { height: 32, paddingHorizontal: 6, borderRadius: 18, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" },
+  selectedTopicChip: { backgroundColor: colors.blue },
+  topicLabel: { color: "#526079", fontSize: 11.5, lineHeight: 15 },
+  selectedTopicLabel: { color: colors.white, fontWeight: "600" },
+  topicExpand: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.pale, alignItems: "center", justifyContent: "center" },
+  gridContent: { paddingHorizontal: 6, paddingBottom: 12 },
+  gridRow: { gap: 5, marginBottom: 7 },
+  postCard: { overflow: "hidden", borderRadius: 11, backgroundColor: colors.white, shadowColor: "#17233B", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  postPhoto: { width: "100%", aspectRatio: 0.78, position: "relative", overflow: "hidden", justifyContent: "space-between" },
+  photoShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(5, 15, 35, 0.06)" },
+  videoTile: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#253757" },
+  videoTileText: { color: colors.white, fontWeight: "700", fontSize: 12 },
+  photoHeader: { height: 34, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(17, 28, 49, 0.16)" },
+  postAvatar: { width: 23, height: 23, borderRadius: 12, borderWidth: 1.5, borderColor: colors.white },
+  postAuthor: { flex: 1, marginLeft: 4, color: colors.white, fontSize: 9, fontWeight: "700" },
+  videoBadge: { color: colors.white, fontSize: 10 },
+  likeCount: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingBottom: 7 },
+  likeText: { color: colors.white, fontSize: 11, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.55)", textShadowRadius: 3 },
+  postTitle: { minHeight: 43, paddingHorizontal: 6, paddingTop: 5, paddingBottom: 6, color: colors.ink, fontSize: 10.5, lineHeight: 14, fontWeight: "500" },
+  empty: { minHeight: 180, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
+  emptyText: { color: colors.muted, fontSize: 14, textAlign: "center" },
 });

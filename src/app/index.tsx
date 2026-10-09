@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth, useSignIn, useSignUp } from "@clerk/expo";
 import { useHostedAuth } from "@clerk/expo/hosted-auth";
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { BrandLogo } from "../components/BrandLogo";
 import {
   ActivityIndicator,
@@ -297,7 +297,8 @@ export default function Index() {
     try {
       setIsSubmitting(true);
       setErrorMessage("");
-      await startHostedAuth({ mode: authMode === "sign-in" ? "sign-in" : "sign-up" });
+      const { createdSessionId } = await startHostedAuth({ mode: authMode === "sign-in" ? "sign-in" : "sign-up" });
+      if (createdSessionId) router.replace("/(tabs)/home");
     } catch (error) {
       setErrorMessage(clerkErrorMessage(error));
     } finally {

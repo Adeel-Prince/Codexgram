@@ -4,6 +4,7 @@ import { v } from "convex/values";
 const app = defineApp({
   env: {
     CLERK_JWT_ISSUER_DOMAIN: v.string(),
+    CLERK_SECRET_KEY: v.optional(v.string()),
   },
 });
 

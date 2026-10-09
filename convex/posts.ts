@@ -115,6 +115,25 @@ export const explore = query({
   },
 });
 
+export const byId = query({
+  args: { postId: v.id("posts") },
+  returns: v.union(v.object({ ...postItemValidator.fields, isFollowing: v.boolean() }), v.null()),
+  handler: async (ctx, args) => {
+    const { profile } = await requireProfile(ctx);
+    const post = await ctx.db.get(args.postId);
+    if (!post) return null;
+    const [item, follow] = await Promise.all([
+      toPostItem(ctx, post, profile._id),
+      post.authorId === profile._id
+        ? Promise.resolve(null)
+        : ctx.db.query("follows")
+          .withIndex("by_follower_and_followed", (q) => q.eq("followerId", profile._id).eq("followedId", post.authorId))
+          .unique(),
+    ]);
+    return item ? { ...item, isFollowing: Boolean(follow) } : null;
+  },
+});
+
 export const homeFeed = query({
   args: {},
   returns: v.array(postItemValidator),

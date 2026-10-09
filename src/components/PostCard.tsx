@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -52,6 +52,7 @@ export function PostCard({ post }: { post: PostItem }) {
   const setLike = useMutation(api.social.setLike);
   const [optimisticLike, setOptimisticLike] = useState<{ base: boolean; value: boolean } | null>(null);
   const [isLiking, setIsLiking] = useState(false);
+  const [saved, setSaved] = useState(false);
   const liked = optimisticLike?.base === post.likedByMe ? optimisticLike.value : post.likedByMe;
 
   const changeLike = async () => {
@@ -70,24 +71,30 @@ export function PostCard({ post }: { post: PostItem }) {
   };
 
   const openComments = () => router.push({ pathname: "/comments/[postId]", params: { postId: post._id } });
+  const openPost = () => router.push({ pathname: "/comments/[postId]", params: { postId: post._id } });
+  const sharePost = () => void Share.share({ message: `Check out @${post.author.username} on Codexgram${post.caption ? `: ${post.caption}` : ""}` });
 
   return (
     <View style={styles.post}>
       <View style={styles.postHeader}>
-        <Image source={post.author.avatarUrl ? { uri: post.author.avatarUrl } : require("../../assets/images/profile/portrait.png")} contentFit="cover" style={styles.avatar} />
-        <View style={styles.authorText}>
-          <Text style={styles.authorName}>{post.author.username}</Text>
-          <Text style={styles.location}>{relativeTime(post.createdAt)}</Text>
-        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${post.author.username}'s post`} onPress={openPost} style={styles.postIdentity}>
+          <View style={styles.avatarClip}>
+            <Image source={post.author.avatarUrl ? { uri: post.author.avatarUrl } : require("../../assets/images/profile/portrait.png")} contentFit="cover" style={styles.avatarImage} />
+          </View>
+          <View style={styles.authorText}>
+            <Text style={styles.authorName}>{post.author.username}</Text>
+            <Text style={styles.location}>{relativeTime(post.createdAt)}</Text>
+          </View>
+        </Pressable>
         <Pressable accessibilityLabel="More post options" accessibilityRole="button" hitSlop={10} style={styles.moreButton}>
           <Svg width={22} height={22} viewBox="0 0 24 24"><Path d="M5 12h.1M12 12h.1M19 12h.1" fill="none" stroke="#68758C" strokeWidth={3.2} strokeLinecap="round" /></Svg>
         </Pressable>
       </View>
-      <View style={styles.mediaFrame}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open post" onPress={openPost} style={styles.mediaFrame}>
         {post.mediaUrl ? post.mediaType === "video" ? <VideoPost url={post.mediaUrl} /> : <Image source={{ uri: post.mediaUrl }} contentFit="cover" style={styles.postImage} /> : <View style={styles.mediaUnavailable}><Text style={styles.mediaUnavailableText}>This post&apos;s media is unavailable.</Text></View>}
-      </View>
+      </Pressable>
       <View style={styles.postDetails}>
-        {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
+        {post.caption ? <Pressable accessibilityRole="button" accessibilityLabel="Open post details" onPress={openPost}><Text style={styles.caption}>{post.caption}</Text></Pressable> : null}
         <View style={styles.postActions}>
           <Pressable accessibilityLabel={liked ? "Unlike post" : "Like post"} accessibilityRole="button" accessibilityState={{ selected: liked }} disabled={isLiking} onPress={() => void changeLike()} style={styles.metricAction}>
             <Svg width={25} height={25} viewBox="0 0 24 24"><Path d="M20.5 8.7c0 4.1-8.5 10.1-8.5 10.1S3.5 12.8 3.5 8.7a4.4 4.4 0 0 1 8.5-1.6 4.4 4.4 0 0 1 8.5 1.6Z" fill={liked ? "#FF334F" : "none"} stroke="#FF334F" strokeWidth={1.8} strokeLinejoin="round" /></Svg>
@@ -96,6 +103,12 @@ export function PostCard({ post }: { post: PostItem }) {
           <Pressable accessibilityLabel={`View ${post.commentsCount} comments`} accessibilityRole="button" onPress={openComments} style={styles.metricAction}>
             <Svg width={24} height={24} viewBox="0 0 24 24"><Path d="M20 11.4a7.8 7.8 0 0 1-8.1 7.5 8.8 8.8 0 0 1-3.8-.8L4 19l1.1-3.4a7.1 7.1 0 0 1-1.3-4.2 7.8 7.8 0 0 1 8.1-7.5 7.8 7.8 0 0 1 8.1 7.5Z" fill="none" stroke="#101C36" strokeWidth={1.8} strokeLinejoin="round" /></Svg>
             <Text style={styles.metric}>{post.commentsCount}</Text>
+          </Pressable>
+          <Pressable accessibilityLabel="Share post" accessibilityRole="button" onPress={sharePost} style={styles.iconAction}>
+            <Svg width={25} height={25} viewBox="0 0 24 24"><Path d="m21 3-7.2 18-3.7-7.1L3 10.2 21 3Z" fill="none" stroke="#101C36" strokeWidth={1.8} strokeLinejoin="round" /><Path d="m10.1 13.9 5.2-5.2" fill="none" stroke="#101C36" strokeWidth={1.8} strokeLinecap="round" /></Svg>
+          </Pressable>
+          <Pressable accessibilityLabel={saved ? "Remove saved post" : "Save post"} accessibilityRole="button" accessibilityState={{ selected: saved }} onPress={() => setSaved((value) => !value)} style={styles.bookmarkAction}>
+            <Svg width={24} height={24} viewBox="0 0 24 24"><Path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8v-17Z" fill={saved ? "#1677F8" : "none"} stroke={saved ? "#1677F8" : "#101C36"} strokeWidth={1.8} strokeLinejoin="round" /></Svg>
           </Pressable>
         </View>
       </View>
@@ -106,18 +119,22 @@ export function PostCard({ post }: { post: PostItem }) {
 const styles = StyleSheet.create({
   post: { marginHorizontal: 11, marginTop: 9, marginBottom: 2, padding: 8, borderRadius: 18, backgroundColor: "#FFFFFF", shadowColor: "#18233B", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   postHeader: { height: 47, flexDirection: "row", alignItems: "center", paddingHorizontal: 3 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#E8EDF5" },
+  postIdentity: { flex: 1, minWidth: 0, height: "100%", flexDirection: "row", alignItems: "center" },
+  avatarClip: { width: 40, height: 40, borderRadius: 20, overflow: "hidden", backgroundColor: "#E8EDF5" },
+  avatarImage: { width: 40, height: 40 },
   authorText: { marginLeft: 9, flex: 1, justifyContent: "center" },
   authorName: { color: "#111827", fontSize: 13.5, fontWeight: "700" },
   location: { marginTop: 2, color: "#74829B", fontSize: 11 },
   moreButton: { width: 32, height: 36, alignItems: "center", justifyContent: "center" },
   mediaFrame: { overflow: "hidden", borderRadius: 13 },
-  postImage: { width: "100%", aspectRatio: 1.15, backgroundColor: "#E7EDF4" },
-  mediaUnavailable: { width: "100%", aspectRatio: 1.15, alignItems: "center", justifyContent: "center", backgroundColor: "#EEF1F5" },
+  postImage: { width: "100%", aspectRatio: 2.1, backgroundColor: "#E7EDF4" },
+  mediaUnavailable: { width: "100%", aspectRatio: 2.1, alignItems: "center", justifyContent: "center", backgroundColor: "#EEF1F5" },
   mediaUnavailableText: { color: "#68758C", fontSize: 12 },
   postDetails: { paddingHorizontal: 5, paddingTop: 6 },
   caption: { color: "#101B32", fontSize: 13, lineHeight: 18 },
-  postActions: { height: 40, flexDirection: "row", alignItems: "center", gap: 20 },
+  postActions: { height: 40, flexDirection: "row", alignItems: "center", gap: 18 },
   metricAction: { flexDirection: "row", alignItems: "center", gap: 6 },
+  iconAction: { width: 28, height: 34, alignItems: "center", justifyContent: "center" },
+  bookmarkAction: { width: 28, height: 34, marginLeft: "auto", alignItems: "center", justifyContent: "center" },
   metric: { color: "#3B465D", fontSize: 12.5 },
 });

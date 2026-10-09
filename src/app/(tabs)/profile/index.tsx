@@ -1,13 +1,13 @@
-import { useClerk, useUser } from "@clerk/expo";
+import { useUser } from "@clerk/expo";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BrandLogo } from "../../components/BrandLogo";
+import { BrandLogo } from "../../../components/BrandLogo";
 import { usePaginatedQuery, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { api } from "../../../../convex/_generated/api";
 
 const profileTabs = [
   { id: "grid", label: "Posts" },
@@ -18,7 +18,7 @@ const profileTabs = [
 
 type ProfileTab = (typeof profileTabs)[number]["id"];
 
-function Header({ onMore }: { onMore: () => void }) {
+function Header() {
   return (
     <View style={styles.header}>
       <View style={styles.brand}>
@@ -26,12 +26,7 @@ function Header({ onMore }: { onMore: () => void }) {
         <Text style={styles.brandName}>Codexgram</Text>
       </View>
       <View style={styles.headerActions}>
-        <Pressable accessibilityLabel="Search" accessibilityRole="button" hitSlop={8} style={styles.headerButton}>
-          <Svg width={23} height={23} viewBox="0 0 24 24">
-            <Path d="M10.8 17.5a6.7 6.7 0 1 0 0-13.4 6.7 6.7 0 0 0 0 13.4ZM16 16l4.2 4.2" fill="none" stroke="#101B32" strokeWidth={1.9} strokeLinecap="round" />
-          </Svg>
-        </Pressable>
-        <Pressable accessibilityLabel="Settings" accessibilityRole="button" hitSlop={8} onPress={onMore} style={styles.headerButton}>
+        <Pressable accessibilityLabel="Settings" accessibilityRole="button" hitSlop={8} onPress={() => router.push("/(tabs)/profile/settings")} style={styles.headerButton}>
           <Svg width={24} height={24} viewBox="0 0 24 24">
             <Path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.87 2h-3.84a.49.49 0 0 0-.49.42l-.36 2.54c-.59.23-1.13.54-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.63 8.48a.5.5 0 0 0 .12.64l2.03 1.58c-.05.31-.08.63-.08.95s.03.64.08.95l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.21.37.3.61.22l2.39-.96c.5.4 1.04.71 1.63.94l.36 2.54c.04.24.24.42.49.42h3.84c.25 0 .45-.18.49-.42l.36-2.54c.59-.23 1.13-.54 1.63-.94l2.39.96c.24.09.49-.01.61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58Z" fill="none" stroke="#101B32" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
             <Path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" fill="none" stroke="#101B32" strokeWidth={1.7} />
@@ -95,13 +90,10 @@ function GalleryTabs({ activeTab, onChange }: { activeTab: ProfileTab; onChange:
 }
 
 export default function ProfileRoute() {
-  const { signOut } = useClerk();
   const { user } = useUser();
   const convexProfile = useQuery(api.profiles.myProfile, {});
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<ProfileTab>("grid");
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [error, setError] = useState("");
   const tileSize = (width - 20) / 3;
   const profileMetadata = user?.unsafeMetadata?.codexgramProfile as
     | { username?: string; bio?: string; website?: string; location?: string }
@@ -112,36 +104,20 @@ export default function ProfileRoute() {
     { initialNumItems: 30 },
   );
 
-  const handleSignOut = async () => {
-    setIsSigningOut(true);
-    setError("");
-    try {
-      await signOut();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to sign out. Please try again.");
-      setIsSigningOut(false);
-    }
-  };
-
-  const showProfileOptions = () => {
-    Alert.alert("Profile options", "Manage your Codexgram account.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: handleSignOut },
-    ]);
-  };
-
   const photos = activeTab === "reels"
     ? profilePosts.results.filter((post) => post.mediaType === "video")
     : activeTab === "grid"
       ? profilePosts.results
       : [];
+  const bio = convexProfile?.bio || profileMetadata?.bio || "Product designer, coffee lover.\nExploring what’s next. ☕ 🌎";
+  const visibleBio = bio.replace(/(^|\s)#[^\s#]+/g, " ").trim();
 
   const ListHeader = (
     <>
-      <Header onMore={showProfileOptions} />
+      <Header />
       <View style={styles.profileSummary}>
         <View style={styles.avatarWrap}>
-          <Image source={user?.hasImage && user.imageUrl ? { uri: user.imageUrl } : require("../../../assets/images/profile/portrait.png")} contentFit="cover" style={styles.avatar} />
+          <Image source={user?.hasImage && user.imageUrl ? { uri: user.imageUrl } : require("../../../../assets/images/profile/portrait.png")} contentFit="cover" style={styles.avatar} />
           <View style={styles.avatarAdd}>
             <Svg width={19} height={19} viewBox="0 0 24 24"><Path d="M12 5v14M5 12h14" fill="none" stroke="#FFFFFF" strokeWidth={2.4} strokeLinecap="round" /></Svg>
           </View>
@@ -155,10 +131,7 @@ export default function ProfileRoute() {
       <View style={styles.profileInfo}>
         <Text numberOfLines={1} style={styles.username}>{convexProfile?.username || profileMetadata?.username || user?.username || "alex.rivera"}</Text>
         <Text numberOfLines={1} style={styles.displayName}>{convexProfile?.displayName || user?.fullName || "Alex Rivera"}</Text>
-        <Text style={styles.bio}>{convexProfile?.bio || profileMetadata?.bio || "Product designer, coffee lover.\nExploring what’s next. ☕ 🌎"}</Text>
-        <View style={styles.tags}>
-          {["#travel", "#design", "#photography", "#coffee"].map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}
-        </View>
+        <Text style={styles.bio}>{visibleBio}</Text>
         <View style={styles.profileActions}>
           <Pressable accessibilityRole="button" onPress={() => router.push("/edit-profile")} style={styles.editButton}>
             <Text style={styles.editButtonLabel}>Edit Profile</Text>
@@ -176,8 +149,6 @@ export default function ProfileRoute() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.screen}>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {isSigningOut ? <View style={styles.signingOut}><Text style={styles.signingOutText}>Signing out…</Text></View> : null}
       <FlatList
         key={activeTab}
         data={photos}
@@ -206,8 +177,8 @@ const styles = StyleSheet.create({
   header: { height: 50, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { flexDirection: "row", alignItems: "center", gap: 8 },
   brandName: { color: "#111827", fontSize: 21, fontWeight: "800", letterSpacing: -0.5 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 16 },
-  headerButton: { width: 30, height: 34, alignItems: "center", justifyContent: "center" },
+  headerActions: { flexDirection: "row", alignItems: "center" },
+  headerButton: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   profileSummary: { flexDirection: "row", alignItems: "center", marginTop: 15, paddingHorizontal: 18 },
   avatarWrap: { width: 112, height: 112, position: "relative" },
   avatar: { width: 112, height: 112, borderRadius: 56, backgroundColor: "#E9F1FA" },
@@ -220,8 +191,6 @@ const styles = StyleSheet.create({
   username: { color: "#111827", fontSize: 17, lineHeight: 22, fontWeight: "700" },
   displayName: { marginTop: 1, color: "#77839A", fontSize: 15.5, lineHeight: 21 },
   bio: { marginTop: 5, color: "#111827", fontSize: 14.5, lineHeight: 20 },
-  tags: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 },
-  tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, overflow: "hidden", backgroundColor: "#F0F3F8", color: "#73819B", fontSize: 11.5, lineHeight: 15 },
   profileActions: { flexDirection: "row", gap: 8, marginTop: 14 },
   editButton: { flex: 1, height: 44, borderRadius: 15, borderWidth: 1, borderColor: "#E7EBF2", backgroundColor: "#F5F6F9", alignItems: "center", justifyContent: "center" },
   editButtonLabel: { color: "#111827", fontSize: 14, fontWeight: "700" },
@@ -238,7 +207,4 @@ const styles = StyleSheet.create({
   galleryEmpty: { paddingHorizontal: 28, paddingVertical: 30, color: "#77839A", textAlign: "center", fontSize: 13 },
   galleryMore: { alignItems: "center", paddingVertical: 14 },
   galleryMoreLabel: { color: "#1677F8", fontSize: 12, fontWeight: "600" },
-  error: { paddingHorizontal: 18, paddingTop: 8, color: "#C62828", fontSize: 13, textAlign: "center" },
-  signingOut: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, zIndex: 3, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.7)" },
-  signingOutText: { color: "#111827", fontSize: 15, fontWeight: "600" },
 });

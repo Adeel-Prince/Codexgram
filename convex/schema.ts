@@ -59,4 +59,13 @@ export default defineSchema({
   })
     .index("by_post_and_created_at", ["postId", "createdAt"])
     .index("by_author", ["authorId"]),
+
+  stories: defineTable({
+    authorId: v.id("profiles"),
+    storageId: v.id("_storage"),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_expires_at", ["expiresAt"])
+    .index("by_author_and_created_at", ["authorId", "createdAt"]),
 });

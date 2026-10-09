@@ -8,10 +8,13 @@
  * @module
  */
 
+import type * as accountDeletion from "../accountDeletion.js";
 import type * as lib_profiles from "../lib/profiles.js";
 import type * as posts from "../posts.js";
 import type * as profiles from "../profiles.js";
+import type * as seed from "../seed.js";
 import type * as social from "../social.js";
+import type * as stories from "../stories.js";
 
 import type {
   ApiFromModules,
@@ -20,10 +23,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accountDeletion: typeof accountDeletion;
   "lib/profiles": typeof lib_profiles;
   posts: typeof posts;
   profiles: typeof profiles;
+  seed: typeof seed;
   social: typeof social;
+  stories: typeof stories;
 }>;
 
 /**

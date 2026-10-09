@@ -71,7 +71,11 @@ export const setFollow = mutation({
 });
 
 export const comments = query({
-  args: { postId: v.id("posts"), paginationOpts: paginationOptsValidator },
+  args: {
+    postId: v.id("posts"),
+    sort: v.union(v.literal("desc"), v.literal("asc")),
+    paginationOpts: paginationOptsValidator,
+  },
   returns: paginationResultValidator(commentValidator),
   handler: async (ctx, args) => {
     const { profile } = await requireProfile(ctx);
@@ -80,7 +84,7 @@ export const comments = query({
     const page = await ctx.db
       .query("comments")
       .withIndex("by_post_and_created_at", (q) => q.eq("postId", args.postId))
-      .order("asc")
+      .order(args.sort)
       .paginate(args.paginationOpts);
     const comments = await Promise.all(page.page.map(async (comment) => {
       const author = await ctx.db.get(comment.authorId);
