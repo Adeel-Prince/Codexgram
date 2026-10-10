@@ -47,7 +47,15 @@
           "imageWidth": 76
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "codexgram",
+          "organization": "tech-developers"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
