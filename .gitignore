@@ -44,3 +44,42 @@ example
 /android
 
 .env.local
+
+# here we add some more hidden dependencies.......
+
+# 📦 Block All Node & System Dependencies
+node_modules/
+package-lock.json
+skills-lock.json
+
+# 📱 React Native & Expo Build Pipelines
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+android/
+ios/
+
+# 🛠️ Production Build Outputs & Local Caches
+dist/
+.wrangler/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 🔐 HIDE ALL ENVIRONMENT CREDENTIALS (Essential Security!)
+.env
+.env.local
+.env.eas-preview
+*.env
+*.local
+
+# 🤖 Agent-Specific Workflow Caching
+.agents/
+.claude/
+.windsurf/
+AGENTS.md
+CLAUDE.md
+PLAN.md
